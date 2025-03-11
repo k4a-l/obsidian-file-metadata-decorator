@@ -128,15 +128,31 @@ export default class MyPlugin extends Plugin {
 		title: string;
 		frontmatter: FrontMatterCache;
 	}): boolean => {
-		if (tags.some((tag) => this.settings.tags.includes(tag))) {
+		const tagsSplit = splitByPosNeg(this.settings.tags);
+		const pathsSplit = splitByPosNeg(this.settings.paths);
+		const titleSplit = splitByPosNeg(this.settings.titles);
+
+		const negativeMatch =
+			tagsSplit.neg.some((tag) => tags.includes(tag)) ||
+			pathsSplit.neg.some((p) => path.startsWith(p)) ||
+			titleSplit.neg.some((t) => title.includes(t));
+
+		if (negativeMatch) {
+			logging("negative matched");
+			return false;
+		}
+
+		if (tagsSplit.pos.some((tag) => tags.includes(tag))) {
 			logging("tag matched");
 			return true;
 		}
-		if (this.settings.paths.some((p) => path.startsWith(p))) {
+
+		if (pathsSplit.pos.some((p) => path.startsWith(p))) {
 			logging("path matched");
 			return true;
 		}
-		if (this.settings.titles.some((t) => title.includes(t))) {
+
+		if (titleSplit.pos.some((t) => title.includes(t))) {
 			logging("title matched");
 			return true;
 		}
@@ -279,3 +295,12 @@ class SampleSettingTab extends PluginSettingTab {
 		);
 	}
 }
+
+const splitByPosNeg = (arr: string[]): { pos: string[]; neg: string[] } => {
+	const positive = arr.flatMap((t) => (t.startsWith("!") ? [] : [t]));
+	const negative = arr.flatMap((t) =>
+		t.startsWith("!") ? t.replace(/^!/, "") : []
+	);
+
+	return { pos: positive, neg: negative };
+};
