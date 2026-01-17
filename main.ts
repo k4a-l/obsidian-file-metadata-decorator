@@ -43,8 +43,10 @@ export default class MyPlugin extends Plugin {
                 this.exec();
             }),
             this.app.metadataCache.on("resolve", (f) => {
-                this.exec();
-
+                const currentFile = this.app.workspace.getActiveFile();
+                if (currentFile?.name === f.name) {
+                    this.exec();
+                }
             }),
             this.app.vault.on("rename", (f) => {
                 this.exec(f);
