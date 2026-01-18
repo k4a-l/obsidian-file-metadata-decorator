@@ -1,3 +1,79 @@
 .dynamic-classname {
 	background-color: red !important;
 }
+
+/* 設定画面のタブスタイル */
+.dynamic-classname-tabs {
+	display: flex;
+	gap: 4px;
+	margin-bottom: 20px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: 4px;
+	flex-wrap: wrap;
+}
+
+.dynamic-classname-tab {
+	padding: 8px 16px;
+	background: transparent;
+	border: none;
+	border-bottom: 2px solid transparent;
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: 14px;
+	transition: all 0.2s;
+}
+
+.dynamic-classname-tab:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.dynamic-classname-tab.active {
+	color: var(--text-accent);
+	border-bottom-color: var(--text-accent);
+}
+
+/* ヘッダーレイアウト */
+.dynamic-classname-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 20px;
+}
+
+.dynamic-classname-title {
+	margin: 0;
+}
+
+.dynamic-classname-delete-btn {
+	padding: 6px 12px;
+	font-size: 13px;
+}
+
+.dynamic-classname-rule-container {
+	margin-top: 20px;
+}
+
+/* エラー表示 */
+textarea.has-error,
+input.has-error {
+	border-color: var(--text-error) !important;
+	background-color: rgba(var(--color-red-rgb), 0.1);
+}
+
+.setting-error-message {
+	color: var(--text-error);
+	font-size: 0.9em;
+	margin-top: 8px;
+	padding: 8px 12px;
+	background-color: rgba(var(--color-red-rgb), 0.1);
+	border-left: 3px solid var(--text-error);
+	border-radius: 4px;
+	width: 100%;
+	box-sizing: border-box;
+	display: block;
+	clear: both;
+}
+

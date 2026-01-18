@@ -1,309 +1,229 @@
 import {
-    App,
-    EventRef,
-    FrontMatterCache,
-    MarkdownView,
-    Notice,
-    Plugin,
-    PluginSettingTab,
-    Setting,
-    TAbstractFile,
+	type App,
+	type EventRef,
+	MarkdownView,
+	Notice,
+	Plugin,
+	type TAbstractFile,
 } from "obsidian";
-
-type OrArray<T> = T | T[];
-
-interface MyPluginSettings {
-    tags: string[];
-    paths: string[];
-    titles: string[];
-    frontmatter: Record<string, OrArray<string | number | boolean>>;
-    className: string;
-}
-
-const DEFAULT_SETTINGS: MyPluginSettings = {
-    tags: ["private"],
-    paths: ["private"],
-    titles: ["🔐"],
-    frontmatter: { publish: ["false"] },
-    className: "dynamic-classname",
-};
+import { evaluateRule } from "./src/evaluator";
+import { DynamicClassnameSettingTab } from "./src/settings";
+import type { EvaluateRuleResult, MetadataInfo, MyPluginSettings } from "./src/types";
+import { DEFAULT_SETTINGS } from "./src/types";
+import { splitByPosNeg } from "./src/utils";
 
 export default class MyPlugin extends Plugin {
-    settings: MyPluginSettings;
+	settings: MyPluginSettings;
 
-    private eventRefs: EventRef[];
+	private eventRefs: EventRef[];
 
-    async onload() {
-        await this.loadSettings();
+	async onload() {
+		await this.loadSettings();
 
-        this.addSettingTab(new SampleSettingTab(this.app, this));
+		// ファイルモードのルールファイルをプリロード
+		await this.preloadRuleFiles();
 
-        this.eventRefs = [
-            this.app.workspace.on("file-open", () => {
-                this.exec();
-            }),
-            this.app.metadataCache.on("resolve", (f) => {
-                const currentFile = this.app.workspace.getActiveFile();
-                if (currentFile?.name === f.name) {
-                    this.exec();
-                }
-            }),
-            this.app.vault.on("rename", (f) => {
-                this.exec(f);
-            }),
-        ];
-    }
-    onunload() {
-        this.eventRefs.forEach((ref) => this.app.metadataCache.offref(ref));
-    }
+		this.addSettingTab(new DynamicClassnameSettingTab(this.app, this));
 
-    async loadSettings() {
-        this.settings = Object.assign(
-            {},
-            DEFAULT_SETTINGS,
-            await this.loadData()
-        );
-    }
+		this.eventRefs = [
+			this.app.workspace.on("file-open", () => {
+				this.exec();
+			}),
+			this.app.metadataCache.on("resolve", (f) => {
+				const currentFile = this.app.workspace.getActiveFile();
+				if (currentFile?.name === f.name) {
+					this.exec();
+				}
+			}),
+			this.app.vault.on("rename", (f) => {
+				this.exec(f);
+			}),
+		];
+	}
+	onunload() {
+		for (const ref of this.eventRefs) {
+			this.app.metadataCache.offref(ref);
+		}
+	}
 
-    async saveSettings() {
-        await this.saveData(this.settings);
-    }
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
 
-    private exec(tAbstractFile?: TAbstractFile) {
-        const markdownView =
-            this.app.workspace.getActiveViewOfType(MarkdownView);
+	async saveSettings() {
+		await this.saveData(this.settings);
+	}
 
-        const activeFile = markdownView?.file;
-        const activeFileCache = activeFile
-            ? this.app.metadataCache.getFileCache(activeFile)
-            : undefined;
+	private async preloadRuleFiles() {
+		const { preloadRuleFile } = await import("./src/evaluator");
 
-        const title = activeFile?.basename ?? tAbstractFile?.name;
-        const path = activeFile?.path ?? tAbstractFile?.path;
+		for (const rule of this.settings.rules) {
+			if (rule.config.type === "function-file") {
+				try {
+					await preloadRuleFile(this.app, rule.config.filePath);
+				} catch (error) {
+					const errorMsg = `Failed to load rule file for "${rule.name}": ${rule.config.filePath}`;
+					console.error(errorMsg, error);
+					
+					// 起動時にポップアップエラーを表示
+					new Notice(
+						`⚠️ Dynamic Classname Plugin\n${errorMsg}\n${error instanceof Error ? error.message : String(error)}`,
+						10000, // 10秒間表示
+					);
+				}
+			}
+		}
+	}
 
-        if (!title || !path) return;
+	private exec(tAbstractFile?: TAbstractFile) {
+		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
-        const tags = activeFileCache
-            ? activeFileCache.tags?.map((t) => t.tag.replace("#", "")) ?? []
-            : [];
-        const frontmatter = activeFileCache
-            ? activeFileCache.frontmatter
-            : undefined;
+		const activeFile = markdownView?.file;
+		const activeFileCache = activeFile
+			? this.app.metadataCache.getFileCache(activeFile)
+			: undefined;
 
-        const el = markdownView?.contentEl
-            ? [markdownView.contentEl]
-            : this.app.workspace
-                .getLeavesOfType("markdown")
-                .map((l) =>
-                    "containerEl" in l
-                        ? (l.containerEl as HTMLElement)
-                        : undefined
-                )
-                .map((el) => el?.querySelector("div.view-content"))
-                .flatMap((el) => el ?? []);
-        // todo: もう少し安全なアクセス方法があるはず
-        // tAbstractFileを使うのはrenameのとき
-        //  ファイルを直接renameするときは普通にfileがつかえる
-        //  エクスプローラーから移動するときはactiveFileがないのでtAbstractFileを使わないといけない
+		const title = activeFile?.basename ?? tAbstractFile?.name;
+		const path = activeFile?.path ?? tAbstractFile?.path;
 
-        const isMatched = this.isPrivate({
-            tags,
-            path,
-            title,
-            frontmatter: frontmatter ?? {},
-        });
+		if (!title || !path) return;
 
-        if (isMatched) {
-            el.forEach((el) => el.classList.add(this.settings.className));
-        } else {
-            el.forEach((el) => el.classList.remove(this.settings.className));
-        }
-    }
+		const tags = activeFileCache
+			? (activeFileCache.tags?.map((t) => t.tag.replace("#", "")) ?? [])
+			: [];
+		const frontmatter = activeFileCache
+			? activeFileCache.frontmatter
+			: undefined;
 
-    private isPrivate = ({
-        tags,
-        path,
-        title,
-        frontmatter,
-    }: {
-        tags: string[];
-        path: string;
-        title: string;
-        frontmatter: FrontMatterCache;
-    }): boolean => {
-        const tagsSplit = splitByPosNeg(this.settings.tags);
-        const pathsSplit = splitByPosNeg(this.settings.paths);
-        const titleSplit = splitByPosNeg(this.settings.titles);
+		const targets = activeFile
+			? this.app.workspace
+					.getLeavesOfType("markdown")
+					.filter((leaf) => {
+						// @ts-ignore: leaf.view.file exists in MarkdownView
+						return leaf.view?.file?.path === activeFile.path;
+					})
+					.map((leaf) => ({
+						// @ts-ignore
+						containerEl: leaf.view.containerEl as HTMLElement,
+						// @ts-ignore
+						contentEl: leaf.view.containerEl.querySelector(
+							".view-content",
+						) as HTMLElement,
+					}))
+			: this.app.workspace.getLeavesOfType("markdown").map((leaf) => ({
+					// @ts-ignore
+					containerEl: leaf.view.containerEl as HTMLElement,
+					// @ts-ignore
+					contentEl: leaf.view.containerEl.querySelector(
+						".view-content",
+					) as HTMLElement,
+				}));
+		// todo: もう少し安全なアクセス方法があるはず
+		// tAbstractFileを使うのはrenameのとき
+		//  ファイルを直接renameするときは普通にfileがつかえる
+		//  エクスプローラーから移動するときはactiveFileがないのでtAbstractFileを使わないといけない
 
-        const negativeMatch =
-            tagsSplit.neg.some((tag) => tags.includes(tag)) ||
-            pathsSplit.neg.some((p) => path.startsWith(p)) ||
-            titleSplit.neg.some((t) => title.includes(t));
+		const metadata: MetadataInfo = {
+			tags,
+			path,
+			title,
+			frontmatter: frontmatter ?? {},
+		};
 
-        if (negativeMatch) {
-            logging("negative matched");
-            return false;
-        }
 
-        if (tagsSplit.pos.some((tag) => tags.includes(tag))) {
-            logging("tag matched");
-            return true;
-        }
+		// 各ルールを評価して適用
+		for (const rule of this.settings.rules) {
+            if (!rule.enabled) continue;
+            
+			// 前回の適用状態をクリアするためのキー
+			const stateKeyClasses = `data-fmd-classes-${rule.id}`;
+			const containerClass = `fmd-container-${rule.id}`;
 
-        if (pathsSplit.pos.some((p) => path.startsWith(p))) {
-            logging("path matched");
-            return true;
-        }
+			const result = evaluateRule(this.app, rule, metadata);
 
-        if (titleSplit.pos.some((t) => title.includes(t))) {
-            logging("title matched");
-            return true;
-        }
 
-        type SingleValue = string | number | boolean;
-        const isSingleValue = (v: unknown): v is SingleValue =>
-            typeof v === "string" ||
-            typeof v === "number" ||
-            typeof v === "boolean";
+			for (const { containerEl, contentEl } of targets) {
+				if (!contentEl || !containerEl) continue;
+				const htmlEl = contentEl;
 
-        const isMatch = (v1: SingleValue, v2: SingleValue) => {
-            return v1.toString() === v2.toString();
-        };
+				// 1. 以前の適用状態を取得してクリーンアップ (Class & Vars)
+				const prevClasses = htmlEl.getAttribute(stateKeyClasses)?.split(" ") || [];
 
-        if (
-            Object.entries(this.settings.frontmatter).some(([sKey, sValue]) => {
-                const fValue = frontmatter[sKey];
-                if (isSingleValue(sValue)) {
-                    if (isSingleValue(fValue)) {
-                        return isMatch(sValue, fValue);
-                    } else if (Array.isArray(fValue)) {
-                        return fValue.some((v) => isMatch(sValue, v));
-                    }
-                } else if (Array.isArray(sValue)) {
-                    if (isSingleValue(fValue)) {
-                        return sValue.some((v) => isMatch(v, fValue));
-                    } else if (Array.isArray(fValue)) {
-                        return sValue.some((v) =>
-                            fValue.some((f) => isMatch(v, f))
-                        );
-                    }
-                }
-            })
-        ) {
-            return true;
-        }
+				// クラス削除
+				if (rule.config.type === "individual") {
+					htmlEl.classList.remove(rule.className);
+				}
+				for (const cls of prevClasses) {
+					if (cls) htmlEl.classList.remove(cls);
+				}
 
-        logging("no matched", {
-            title,
-            f: this.settings.titles,
-        });
+	
+				// 属性クリア
+				htmlEl.removeAttribute(stateKeyClasses);
 
-        return false;
-    };
+				// Dom要素削除 (ルールごとにコンテナを削除)
+				const existingContainers = htmlEl.querySelectorAll(`.${containerClass}`);
+				for (const c of Array.from(existingContainers)) {
+					c.remove();
+				}
+
+				// 2. 新しい結果を適用
+				if (result) {
+					// --- A. Class & CSS Variables (既存) ---
+
+					console.log(
+						`[FileMetadataDecorator] Applied to ${metadata.path}:`,
+						result,
+					);
+					
+					// Individualルールの場合は固定クラス名を適用
+					if (rule.config.type === "individual") {
+						htmlEl.classList.add(rule.className);
+					}
+
+					// 動的クラス名の適用
+					if (result.classNames && result.classNames.length > 0) {
+						for (const cls of result.classNames) {
+							if (cls) htmlEl.classList.add(cls);
+						}
+						// 適用したクラス名を記録
+						htmlEl.setAttribute(stateKeyClasses, result.classNames.join(" "));
+					}
+
+			
+                    
+					// --- B. DOM Elements (新規) ---
+					if (result.elements && result.elements.length > 0) {
+						// コンテナを作成
+						// ユーザー指定のクラス名があればそれも付けるが、ここでは固定クラス + IDクラス
+						const container = htmlEl.createDiv({
+							cls: `obsidian-file-metadata-decorator ${containerClass}`,
+						});
+
+
+
+						for (const elemData of result.elements) {
+							const child = container.createDiv({
+								cls: elemData.className,
+							});
+							if (elemData.text) {
+								child.setText(elemData.text);
+							}
+                
+							if (elemData.style) {
+								for (const [key, value] of Object.entries(elemData.style)) {
+									// キャメルケースをケバブケースに変換
+									const kebabKey = key.replace(
+										/[A-Z]/g,
+										(m) => `-${m.toLowerCase()}`,
+									);
+									child.style.setProperty(kebabKey, String(value));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
-
-const isProduction = process.env.NODE_ENV === "production";
-
-const logging: typeof console.log = (...args) => {
-    !isProduction && console.log(...args);
-};
-
-class SampleSettingTab extends PluginSettingTab {
-    plugin: MyPlugin;
-
-    constructor(app: App, plugin: MyPlugin) {
-        super(app, plugin);
-        this.plugin = plugin;
-    }
-
-    display(): void {
-        const { containerEl } = this;
-
-        containerEl.empty();
-
-        new Setting(containerEl).infoEl.setText("");
-
-        new Setting(containerEl).setName("tags").addTextArea((text) =>
-            text
-                .setValue(this.plugin.settings.tags.join("\n"))
-                .onChange(async (value) => {
-                    this.plugin.settings.tags = value
-                        .split("\n")
-                        .filter((v) => v);
-                    await this.plugin.saveSettings();
-                })
-        );
-
-        new Setting(containerEl)
-            .setName("paths")
-            .setDesc("startsWith match")
-            .addTextArea((text) =>
-                text
-                    .setValue(this.plugin.settings.paths.join("\n"))
-                    .onChange(async (value) => {
-                        this.plugin.settings.paths = value
-                            .split("\n")
-                            .filter((v) => v);
-                        await this.plugin.saveSettings();
-                    })
-            );
-
-        new Setting(containerEl)
-            .setName("titles")
-            .setDesc("includes match")
-            .addTextArea((text) =>
-                text
-                    .setValue(this.plugin.settings.titles.join("\n"))
-                    .onChange(async (value) => {
-                        this.plugin.settings.titles = value
-                            .split("\n")
-                            .filter((v) => v);
-                        await this.plugin.saveSettings();
-                    })
-            );
-
-        new Setting(containerEl)
-            .setName("frontmatter")
-            .setDesc(
-                String.raw`input format: Record<string,string | string[]>. 
-                example:
-                    {
-                        "publish": 'false'
-                        "tags": ['tag1', 'tag2']
-                    }  
-                `
-            )
-            .addTextArea((text) =>
-                text
-                    .setValue(JSON.stringify(this.plugin.settings.frontmatter))
-                    .onChange(async (value) => {
-                        try {
-                            this.plugin.settings.frontmatter =
-                                JSON.parse(value);
-                            await this.plugin.saveSettings();
-                        } catch (error) {
-                            console.error(error);
-                            new Notice(`frontmatter is Invalid JSON`);
-                        }
-                    })
-            );
-
-        new Setting(containerEl).setName("className").addText((text) =>
-            text
-                .setValue(this.plugin.settings.className)
-                .onChange(async (value) => {
-                    this.plugin.settings.className = value.trim();
-                    await this.plugin.saveSettings();
-                })
-        );
-    }
-}
-
-const splitByPosNeg = (arr: string[]): { pos: string[]; neg: string[] } => {
-    const positive = arr.flatMap((t) => (t.startsWith("!") ? [] : [t]));
-    const negative = arr.flatMap((t) =>
-        t.startsWith("!") ? t.replace(/^!/, "") : []
-    );
-
-    return { pos: positive, neg: negative };
-};

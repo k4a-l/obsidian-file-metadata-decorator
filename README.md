@@ -1,57 +1,129 @@
-# obsidian-dynamic-classname
+# Obsidian File Metadata Decorator
 
-Assign user-defined class names to views according to tags, front matter, title, and path conditions
+Dynamically decorate your Obsidian File Views based on metadata (Frontmatter, Tags, File Path, Title).
+This plugin allows you to run a JavaScript/TypeScript function to evaluate the current file's metadata and inject **CSS Classes**, **CSS Variables**, and **Custom DOM Elements** into the view.
 
-> [!NOTE]
-> This plugin is almost exclusively for me.
-> However, if you have any requests, feel free to make an issue.
+## Features
 
+- **Dynamic CSS Classes**: Add classes to the `.view-content` element based on file status, tags, etc.
+- **CSS Variables**: Inject data as CSS variables for use in `::after/::before` pseudo-elements.
+- **Custom DOM Elements**: Generate badges, banners, or any DOM elements directly into the view container.
+- **TypeScript Support**: Develop your rules in TypeScript with full type safety using the included Playground environment.
 
+## Usage
 
+### 1. Enable the Plugin
+Enable "File Metadata Decorator" in Obsidian settings.
+
+### 2. Prepare the Script
+Create a JavaScript file (e.g., `scripts/file-metadata-decorator.js`) in your vault or plugin folder.
+It should export a default function that takes `metadata` and returns an evaluation result.
+
+**Note**: We highly recommend generating this file using the **Playground** (see below) to use TypeScript and bundling.
+
+### 3. Configure the Rule
+Go to the plugin settings:
+- **Rule Type**: `function-file`
+- **File Path**: Path to your script (e.g., `scripts/file-metadata-decorator.js`)
+
+## Development (Playground)
+
+This plugin comes with a `playground` directory to help you write rules in TypeScript.
+
+1.  Navigate to the plugin directory in your terminal.
+2.  Run `npm install`.
+3.  Edit `playground/file-metadata-decorator.ts`.
+4.  Run `npm run playground:watch` to automatically compile your TS code to `scripts/file-metadata-decorator.js` (or wherever your build script is configured to output).
+
+### API Reference
+
+Your function receives a `metadata` object and should return an `EvaluateRuleResult`.
+
+#### Input: `EvaluateFunction`
+```typescript
+type EvaluateFunction = (metadata: {
+    frontmatter: Record<string, any>;
+    tags: string[] | null;
+    path: string;
+    title: string;
+}) => EvaluateRuleResult;
+```
+
+#### Output: `EvaluateRuleResult`
+```typescript
+type EvaluateRuleResult = {
+    // Add these classes to .view-content
+    classNames: string[];
+    
+    // Set these CSS variables on .view-content (e.g., { "--status": "todo" })
+    cssVariables?: Record<string, string>;
+    
+    // Create these DOM elements inside .obsidian-file-metadata-decorator container
+    elements?: DynamicElement[];
+};
+
+type DynamicElement = {
+    className?: string; // CSS class for the element
+    text?: string;      // Text content
+    style?: Partial<CSSStyleDeclaration> | Record<string, string>; // Inline styles
+};
+```
 
 ## Example
 
-### Settings
+```typescript
+import z from "zod";
 
-![](./assets/setting.png)
+const main = ({ frontmatter, tags }) => {
+    const result = {
+        classNames: [],
+        elements: []
+    };
 
-### Css
+    // Example: Check "status" in frontmatter
+    if (frontmatter.status === "todo") {
+        result.classNames.push("status-todo");
+        
+        // Add a badge
+        result.elements.push({
+            text: "TODO",
+            style: {
+                backgroundColor: "red",
+                color: "white",
+                fontWeight: "bold"
+            }
+        });
+    }
 
-```css
-.view-content {
-	&::after {
-		padding: 2px 0.5em;
-		border-radius: 4px;
-		font-weight: bold;
+    return result;
+};
 
-		position: absolute;
-		top: 20px;
-		right: 40px;
-	}
-
-	&.private {
-        border: 2px solid red;
-		&::after {
-			content: "🔐 Private";
-			color: red;
-			background-color: rgb(255, 223, 223);
-			border: 1px solid red;
-		}
-	}
-	&:not(.private) {
-		border: 2px solid blue;
-		&::after {
-			content: "📣 Public";
-			color: blue;
-			background-color: rgb(223, 223, 255);
-			border: 1px solid blue;
-		}
-	}
-}
+export default main;
 ```
 
-### View
+## DOM Structure
 
-![](./assets/private.png)
-![](./assets/public.png)
+The plugin injects a container element into the `.view-content`:
 
+```html
+<div class="view-content ...">
+    <!-- Your content ... -->
+    
+    <div class="obsidian-file-metadata-decorator fmd-container-{ruleId}">
+        <div class="status-badge" style="...">TODO</div>
+        <!-- Other elements -->
+    </div>
+</div>
+```
+
+You can style `.obsidian-file-metadata-decorator` to position it (e.g., absolute positioning to the top-right).
+
+```css
+.obsidian-file-metadata-decorator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+}
+```

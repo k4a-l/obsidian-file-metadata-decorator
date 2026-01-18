@@ -1,11 +1,15 @@
 {
-	"id": "obsidian-dynamic-classname",
-	"name": "Dynamic Classname",
+	"id": "obsidian-file-metadata-decorator",
+	"name": "File Metadata Decorator",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Demonstrates some of the capabilities of the Obsidian API.",
 	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"authorUrl": "https://github.com/k4a-l",
+	"fundingUrl": {
+		"Buy Me a Coffee": "https://buymeacoffee.com/kasahala",
+		"GitHub Sponsor": "https://github.com/sponsors/k4a-l",
+		"PayPal": "https://www.paypal.com/paypalme/k4al"
+	},
 	"isDesktopOnly": false
 }
