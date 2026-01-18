@@ -141,6 +141,8 @@ export default class MyPlugin extends Plugin {
 
 			const result = evaluateRule(this.app, rule, metadata);
 
+     
+
 
 			for (const { containerEl, contentEl } of targets) {
 				if (!contentEl || !containerEl) continue;
@@ -171,10 +173,10 @@ export default class MyPlugin extends Plugin {
 				if (result) {
 					// --- A. Class & CSS Variables (既存) ---
 
-					console.log(
-						`[FileMetadataDecorator] Applied to ${metadata.path}:`,
-						result,
-					);
+					// console.log(
+					// 	`[FileMetadataDecorator] Applied to ${metadata.path}:`,
+					// 	result,
+					// );
 					
 					// Individualルールの場合は固定クラス名を適用
 					if (rule.config.type === "individual") {

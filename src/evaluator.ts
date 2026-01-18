@@ -59,6 +59,7 @@ function evaluateFileFunctionRule(
 ): EvaluateRuleResult | null {
 	try {
 		const cachedContent = fileCache.get(config.filePath);
+		console.log({ cachedContent });
 		if (!cachedContent) {
 			console.warn(
 				`File not cached: ${config.filePath}. Loading asynchronously...`,
@@ -81,8 +82,7 @@ function evaluateFileFunctionRule(
 		const result = evaluateFunc(metadata);
 
 		if (result && typeof result === "object") {
-			const hasClasses = result.classNames && result.classNames.length > 0;
-			return hasClasses ? result : null;
+			return result;
 		}
 
 		return null;

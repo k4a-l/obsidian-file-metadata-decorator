@@ -1,4 +1,3 @@
-import z from "zod";
 import type { EvaluateFunction, EvaluateRuleResult } from "../src/types";
 
 const evaluatePrivatePublic: EvaluateFunction = ({
@@ -19,15 +18,45 @@ const evaluatePrivatePublic: EvaluateFunction = ({
 	const isPublic =
 		tags.some((t) => publicTags.includes(t)) ||
 		publicPaths.some((p) => path.includes(p)) ||
-		!privateTitles.some((t) => title.includes(t)) ||
 		frontmatter["publish"] === true ||
-		frontmatter["publish"] === "true";
+		(frontmatter["publish"] === "true" &&
+			!privateTitles.some((t) => title.includes(t)));
 
 	if (isPublic) {
-		result.classNames.push("public");
+		result.elements.push({
+			className: "public",
+			text: "public",
+			style: {
+				backgroundColor: "red",
+			},
+		});
+	} else {
+		result.elements.push({
+			className: "private",
+			text: "🔏",
+			style: {
+				backgroundColor: "lightgray",
+			},
+		});
 	}
 
 	return result;
+};
+
+const statuses = {
+	todo: "rgb(64, 128, 255)",
+	doing: "rgb(9, 158, 64)",
+	pending: "rgb(128, 128, 128)",
+	waiting: "rgb(255, 200, 64)",
+	"in-continuing": "rgb(72, 146, 80)",
+	"in-verifying": "rgb(72, 146, 80)",
+};
+
+const isStatus = (status: unknown): status is keyof typeof statuses => {
+	if (typeof status !== "string") {
+		return false;
+	}
+	return Object.keys(statuses).includes(status);
 };
 
 const evaluateTaskStatus: EvaluateFunction = ({ frontmatter }) => {
@@ -38,21 +67,15 @@ const evaluateTaskStatus: EvaluateFunction = ({ frontmatter }) => {
 
 	// ステータスの判定
 	const status = frontmatter["status"];
-	const statusParsed = z
-		.enum([
-			"todo",
-			"doing",
-			"pending",
-			"waiting",
-			"in-continuing",
-			"in-verifying",
-		])
-		.safeParse(status);
+	const isValidStatus = isStatus(status);
 
-	if (statusParsed.success) {
+	if (isValidStatus) {
 		result.elements.push({
-			className: `status-badge status-${statusParsed.data}`,
-			text: statusParsed.data.toUpperCase(),
+			className: `status-badge status-${status}`,
+			text: status.toUpperCase(),
+			style: {
+				backgroundColor: statuses[status],
+			},
 		});
 	}
 
