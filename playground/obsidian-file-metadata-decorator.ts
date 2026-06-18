@@ -17,7 +17,7 @@ const evaluatePrivatePublic: EvaluateFunction = ({
 
 	const isPublic =
 		tags.some((t) => publicTags.includes(t)) ||
-		publicPaths.some((p) => path.includes(p)) ||
+		publicPaths.some((p) => path.startsWith(p)) ||
 		frontmatter["publish"] === true ||
 		(frontmatter["publish"] === "true" &&
 			!privateTitles.some((t) => title.includes(t)));
@@ -66,7 +66,7 @@ const evaluateTaskStatus: EvaluateFunction = ({ frontmatter }) => {
 	};
 
 	// ステータスの判定
-	const status = frontmatter["status"];
+	const status = frontmatter["task"];
 	const isValidStatus = isStatus(status);
 
 	if (isValidStatus) {

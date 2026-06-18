@@ -107,7 +107,7 @@ export default class MyPlugin extends Plugin {
 						containerEl: leaf.view.containerEl as HTMLElement,
 						// @ts-ignore
 						contentEl: leaf.view.containerEl.querySelector(
-							".view-content",
+							".view-header",
 						) as HTMLElement,
 					}))
 			: this.app.workspace.getLeavesOfType("markdown").map((leaf) => ({
@@ -115,7 +115,7 @@ export default class MyPlugin extends Plugin {
 					containerEl: leaf.view.containerEl as HTMLElement,
 					// @ts-ignore
 					contentEl: leaf.view.containerEl.querySelector(
-						".view-content",
+						".view-header",
 					) as HTMLElement,
 				}));
 		// todo: もう少し安全なアクセス方法があるはず
